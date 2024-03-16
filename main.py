@@ -353,11 +353,19 @@ async def automod_help(ctx):
 async def wordban_help(ctx):
     prefix = get_prefix(client, ctx.message)  # You need to define a function to get the prefix for the guild
 
-    em = discord.Embed(title="Word Ban Command",
-                       description="Bans a specified word from being used in the guild",
-                       color=ctx.author.colour)
-    em.add_field(name="**Syntax**", value=f"`{prefix}wordban <word>`", inline=False)
-    await ctx.send(embed=em)
+    embed = discord.Embed(title="Banned Words Command",
+                              description="Bans a specified word from being used in the guild\nAliases : `bannedwords/bw`. Use the following subcommands:",
+                              color=discord.Color.red())
+    embed.add_field(name="Add Banned Word",
+                        value="`wordban add <word>`: Add a word to the list of banned words.",
+                        inline=False)
+    embed.add_field(name="Get Banned Words",
+                        value="`wordban get`: Get the list of banned words for this server.",
+                        inline=False)
+    embed.add_field(name="Remove Banned Word",
+                        value="`wordban remove <word>`: Remove a word from the list of banned words.",
+                        inline=False)
+    await ctx.send(embed=embed)
 
 
 @help.command(name='slowmode', aliases = ['slomo','sm'])

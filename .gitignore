@@ -6,3 +6,4 @@ __pycache__
 banned_words.json
 prefixes.json
 strikes.json
+spam_messages.json

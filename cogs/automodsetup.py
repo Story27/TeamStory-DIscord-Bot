@@ -24,12 +24,17 @@ class AutoModSetup(commands.Cog):
         for action, data in thresholds.items():
             if action == 'ban':
                 embed.add_field(name=f"{action.capitalize()} Threshold",
-                                value=f"Strikes: {data['strikes']}",
+                                value=f"Strikes: {data.get('strikes', 'N/A')}",
+                                inline=False)
+            elif action == 'spam':
+                embed.add_field(name=f"{action.capitalize()} Threshold",
+                                value=f"Messages: {data.get('messages', 'N/A')}\nDuration: {data.get('duration', 'N/A')} seconds",
                                 inline=False)
             else:
                 embed.add_field(name=f"{action.capitalize()} Threshold",
-                                value=f"Strikes: {data['strikes']}\nDuration: {data.get('duration', 'N/A')} seconds",
+                                value=f"Strikes: {data.get('strikes', 'N/A')}\nDuration: {data.get('duration', 'N/A')} seconds",
                                 inline=False)
+
 
         embed.set_footer(text="React with ✏️ to customize settings or ❌ to cancel.")
 
@@ -57,7 +62,7 @@ class AutoModSetup(commands.Cog):
         thresholds = self.strikes_cog.thresholds.get(guild_id, {})
         try:
             while True:
-                await message.edit(content="Please specify the action you want to customize (tempmute, mute, tempban, ban):")
+                await message.edit(content="Please specify the action you want to customize (tempmute, mute, tempban, ban, spam):")
                 action_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
                 action = action_msg.content.lower()
                 await ctx.channel.purge(limit=1)
@@ -65,22 +70,28 @@ class AutoModSetup(commands.Cog):
                 if action not in thresholds:
                     await message.edit(content=f"Invalid action '{action}'. Please try again.")
                     continue
-
-                await message.edit(content=f"Please specify the new number of strikes for {action.capitalize()}:")
-                strikes_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
-                strikes = int(strikes_msg.content)
-                await ctx.channel.purge(limit=1)
-
-                if action != 'ban':
+                if action!='spam':
+                    await message.edit(content=f"Please specify the new number of strikes for {action.capitalize()}:")
+                    strikes_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
+                    strikes = int(strikes_msg.content)
+                    await ctx.channel.purge(limit=1)
                     await message.edit(content=f"Please specify the new duration (in seconds) for {action.capitalize()}:")
                     duration_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
                     duration = int(duration_msg.content)
                     await ctx.channel.purge(limit=1)
-                else:
-                    # Assign a default duration for "ban"
-                    duration = None
 
-                thresholds[action]['strikes'] = strikes
+                if action == 'spam':
+                    await message.edit(content=f"Please specify the no. of messages for {action.capitalize()}:")
+                    msg_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
+                    msg = int(msg_msg.content)
+                    await ctx.channel.purge(limit=1)
+                    await message.edit(content=f"Please specify the new duration (in seconds) for {action.capitalize()}:")
+                    duration_msg = await self.client.wait_for('message', check=lambda m: m.author == ctx.author, timeout=60.0)
+                    duration = int(duration_msg.content)
+                    await ctx.channel.purge(limit=1)
+                    thresholds[action]['messages'] = msg
+                else:
+                    thresholds[action]['strikes'] = strikes
                 if action != 'ban':
                     thresholds[action]['duration'] = duration
                 self.strikes_cog.save_server_thresholds(guild_id)
@@ -96,6 +107,10 @@ class AutoModSetup(commands.Cog):
                         updated_embed.add_field(name=f"{action.capitalize()} Threshold",
                                                 value=f"Strikes: {data['strikes']}",
                                                 inline=False)
+                    elif action == 'spam':
+                        updated_embed.add_field(name=f"{action.capitalize()} Threshold",
+                                        value=f"Messages: {data.get('messages', 'N/A')}\nDuration: {data.get('duration', 'N/A')} seconds",
+                                        inline=False)
                     else:
                         updated_embed.add_field(name=f"{action.capitalize()} Threshold",
                                                 value=f"Strikes: {data['strikes']}\nDuration: {data.get('duration', 'N/A')} seconds",
@@ -125,6 +140,7 @@ class AutoModSetup(commands.Cog):
             await message.edit(content="AutoMod setup timed out.")
         finally:
             await message.clear_reactions()
+
 
 
 # Setup function

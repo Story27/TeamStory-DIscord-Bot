@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import os
 import asyncio
+from datetime import datetime, timedelta
 
 class Strikes(commands.Cog):
     def __init__(self, client):
@@ -11,11 +12,12 @@ class Strikes(commands.Cog):
         self.banned_words_db = {}  # Dictionary to store banned words for each server
         self.thresholds = {}  # Dictionary to store thresholds for each action
         self.muted_role_name = "Muted"  # Name of the muted role
+        self.spam_messages = {}  # Dictionary to store spam messages data
 
         # Load strikes database, banned words, and thresholds for each server
         self.load_strikes()
         self.load_banned_words()
-        self.load_thresholds()
+        self.load_spam_messages()
 
     # Load Banned Words Database-----------------------------------------------------
     def load_banned_words(self):
@@ -29,26 +31,46 @@ class Strikes(commands.Cog):
             self.banned_words_db = {}
 
     # Load Thresholds Database--------------------------------------------------------
-    def load_thresholds(self):
-        if not os.path.exists('thresholds'):
-            os.makedirs('thresholds')
-
-    def load_server_thresholds(self, guild_id):
-        file_path = f'thresholds/{guild_id}.json'
-        if not os.path.exists(file_path):
-            self.thresholds[guild_id] = {'tempmute': {'strikes': 3, 'duration': 1800}, 
-                                          'mute': {'strikes': 5, 'duration': 86400}, 
-                                          'tempban': {'strikes': 7, 'duration': 604800}, 
-                                          'ban': {'strikes': 10}}
-            self.save_server_thresholds(guild_id)
-        else:
-            with open(file_path, 'r') as file:
-                self.thresholds[guild_id] = json.load(file)
+    def load_thresholds(self, guild_id):
+        if guild_id not in self.thresholds:
+            file_path = f'thresholds/{guild_id}.json'
+            if not os.path.exists(file_path):
+                self.thresholds[guild_id] = {'tempmute': {'strikes': 3, 'duration': 1800}, 
+                                            'mute': {'strikes': 5, 'duration': 86400}, 
+                                            'tempban': {'strikes': 7, 'duration': 604800}, 
+                                            'ban': {'strikes': 10},
+                                            'spam': {'messages': 5, 'duration': 10}}  # Add spam detection threshold
+                self.save_server_thresholds(guild_id)
+            else:
+                with open(file_path, 'r') as file:
+                    self.thresholds[guild_id] = json.load(file)
 
     def save_server_thresholds(self, guild_id):
         file_path = f'thresholds/{guild_id}.json'
         with open(file_path, 'w') as file:
             json.dump(self.thresholds[guild_id], file, indent=4)
+
+    # Load Spam Messages Database-----------------------------------------------------
+    def load_spam_messages(self):
+        if not os.path.exists('spam_messages.json'):
+            with open('spam_messages.json', 'w') as file:
+                json.dump({}, file)
+        try:
+            with open('spam_messages.json', 'r') as file:
+                self.spam_messages = json.load(file)
+        except json.JSONDecodeError:
+            self.spam_messages = {}
+
+    def save_spam_messages(self):
+        current_time = datetime.now()
+        # Filter out spam messages older than 2 minutes
+        filtered_spam_messages = {
+            author_id: [str(time) for time in message_times if current_time - datetime.fromisoformat(time) <= timedelta(minutes=2)]
+            for author_id, message_times in self.spam_messages.items()
+        }
+
+        with open('spam_messages.json', 'w') as file:
+            json.dump(filtered_spam_messages, file, indent=4)
 
     # Load Strikes Database-----------------------------------------------------------
     def load_strikes(self):
@@ -66,6 +88,21 @@ class Strikes(commands.Cog):
         with open('strikes.json', 'w') as file:
             json.dump(self.strikes_db, file, indent=4)
 
+    async def add_spam_strike(self, user):
+        user_id = str(user.id)
+        # Update strikes for the user
+        previous_strikes = self.strikes_db.get(user_id, 0)
+        new_strikes = previous_strikes + 1
+        self.strikes_db[user_id] = new_strikes
+        await self.save_strikes()
+    
+        # Send DM with updated strikes count
+        await self.send_strikes_dm(user, new_strikes)
+    
+        # Check if any action needs to be taken based on the updated strikes count
+        guild_id = str(user.guild.id)
+        await self.check_action(user.guild.system_channel, user, new_strikes, guild_id)
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild:
@@ -82,7 +119,14 @@ class Strikes(commands.Cog):
         author_id = str(message.author.id)
 
         if guild_id not in self.thresholds:
-            self.load_server_thresholds(guild_id)
+            self.load_thresholds(guild_id)
+            
+        # Get the author ID
+        author_id = str(message.author.id)
+
+        # Ensure author_id is present in self.spam_messages
+        if author_id not in self.spam_messages:
+            self.spam_messages[author_id] = []
 
         if guild_id in self.banned_words_db:
             for word in self.banned_words_db[guild_id]:
@@ -104,7 +148,49 @@ class Strikes(commands.Cog):
                     
                     # Check if any action needs to be taken based on the updated strikes count
                     await self.check_action(message.channel, message.author, new_strikes, guild_id)
-                
+                    
+        # Spam detection logic
+        # Check if author_id exists in self.spam_messages and initialize if not
+        if author_id not in self.spam_messages:
+            self.spam_messages[author_id] = []
+
+        # Retrieve messages_threshold and duration_threshold from thresholds dictionary
+        if 'spam' in self.thresholds[guild_id]:
+            spam_threshold = self.thresholds[guild_id]['spam']
+            if isinstance(spam_threshold, dict):
+                messages_threshold = spam_threshold.get('messages', 5)
+                duration_threshold = spam_threshold.get('duration', 10)
+
+                # Check if the number of messages exceeds the threshold
+                if len(self.spam_messages[author_id]) >= messages_threshold:
+                    # Check the time difference between the last message and the current message
+                    current_time = message.created_at
+                    last_message_time = self.spam_messages[author_id][-1]
+                    time_difference = (current_time - last_message_time).seconds
+
+                    if time_difference <= duration_threshold:
+                        # Spam detected
+                        # Delete previous spam messages of the user
+                        async for prev_message in message.channel.history(limit=None):
+                            if prev_message.author == message.author:
+                                await prev_message.delete()
+                        await self.add_spam_strike(message.author)
+                    else:
+                        # Reset spam messages list
+                        self.spam_messages[author_id] = [current_time]
+                else:
+                    # Add message time to the list
+                    self.spam_messages[author_id].append(message.created_at)
+                    
+                    # Notify the user about not being spam
+                    embed = discord.Embed(title="Spam Detection",
+                                        description="Your message was not detected as spam.",
+                                        color=discord.Color.green())
+                    await message.author.send(embed=embed)
+
+        # Save spam messages to JSON file after each message
+        self.save_spam_messages()
+
     async def send_strikes_dm(self, user, strikes_count):
         author_id = str(user.id)
         dm_channel = await user.create_dm()
