@@ -1,7 +1,6 @@
 from datetime import datetime
 import discord
 from discord.ext import commands
-
 from discord import Embed
 from discord.ext.commands import Cog
 from discord.ext.commands import command
@@ -10,8 +9,7 @@ from discord.ext.commands import command
 class Log(commands.Cog):
 	def __init__(self, bot):
 		self.bot = bot
-		
-
+	
 	@commands.Cog.listener()
 	async def on_user_update(self, before, after):
 		ch_id = 855302146467299331

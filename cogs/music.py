@@ -3,6 +3,7 @@ from discord.ext import commands
 import wavelink
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+from discord import FFmpegPCMAudio
 
 class Music(commands.Cog):
     def __init__(self, client):
@@ -23,6 +24,8 @@ class Music(commands.Cog):
         if voice_channel:
             await voice_channel.connect()
             await ctx.send(f"Connected to {voice_channel}")
+        else:
+            await ctx.send(f"You are not in any Voice Channels.")
 
     @commands.command(name="play", help="Plays a selected song from Spotify")
     async def play(self, ctx, *args):
@@ -97,6 +100,8 @@ class Music(commands.Cog):
         if vc:
             await vc.disconnect()
             await ctx.send("Left the voice channel")
+        else:
+            await ctx.send("I'm not in a voice channel.")
 
 async def setup(client):
     await client.add_cog(Music(client))

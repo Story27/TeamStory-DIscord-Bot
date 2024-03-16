@@ -27,8 +27,8 @@ class Cmd(commands.Cog):
     @commands.command(name='version')
     async def version(self, context):
         await context.message.delete()
-        myembed = discord.Embed(title="Current Version", description="The bot is currently in Trial Phase", color=0x00ffff)
-        myembed.add_field(name="Version Code:", value="1.0", inline=False)
+        myembed = discord.Embed(title="Current Version", description="The bot is ready to deploy.", color=0x00ffff)
+        myembed.add_field(name="Version Code:", value="2.0", inline=False)
         myembed.add_field(name="Date Released:", value="October 10th, 2021", inline=False)
         myembed.set_footer(text="Information may change in the future")
         myembed.set_author(name="Story", icon_url=context.bot.user.avatar.url)  # Use bot's user avatar.url
