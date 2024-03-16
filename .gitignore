@@ -1,0 +1,5 @@
+.env
+thresholds
+.cache
+cogs/__pycache__
+__pycache__
