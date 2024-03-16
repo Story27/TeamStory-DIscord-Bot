@@ -3,3 +3,6 @@ thresholds
 .cache
 cogs/__pycache__
 __pycache__
+banned_words.json
+prefixes.json
+strikes.json
